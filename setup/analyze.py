@@ -1,25 +1,21 @@
 import logging
-from importlib import reload
 
-reload(logging)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s %(message)s", datefmt="%Y-%m-%d %I:%M:%S %p")
 
-import glob as glob
 import os as os
-import subprocess as sp
-import shutil as shutil
-from itertools import compress
 import numpy as np
+import json
 
 import parmed as pmd
 import paprika
 from paprika.restraints import static_DAT_restraint
 from paprika.restraints import DAT_restraint
-from paprika.restraints.amber_restraints import amber_restraint_line
-from paprika.restraints.restraints import create_window_list
-from paprika.utils import make_window_dirs
+
+from paprika.analysis import fe_calc
+from paprika.io import NumpyEncoder
+
 
 logging.info("Started logging...")
 logging.info("pAPRika version: " + paprika.__version__)
@@ -300,35 +296,21 @@ for system in systems:
         + guest_wall_restraints
     )
 
-    window_list = create_window_list(guest_restraints)
 
-    print("Writing restratint file in each window...")
-    for window in window_list:
-        if not os.path.exists(os.path.join("..", system, window)):
-            os.makedirs(os.path.join("..", system, window))
-        with open(
-            os.path.join("..", system, window, "disang.rest"), "w"
-        ) as file:
-            if window[0] == "a":
-                phase = "attach"
-                restraints = (
-                    static_restraints
-                    + guest_restraints
-                    + conformational_restraints
-                    + guest_wall_restraints
-                )
-            if window[0] == "p":
-                phase = "pull"
-                restraints = (
-                    static_restraints + conformational_restraints + guest_restraints
-                )
-            if window[0] == "r":
-                phase = "release"
-                restraints = (
-                    static_restraints + conformational_restraints + guest_restraints
-                )
+    analyze = fe_calc()
+    analyze.prmtop = structure.topology
+    analyze.trajectory = "prod.*.nc"
+    analyze.path = os.path.join("..", system)
 
-            for restraint in restraints:
-                string = amber_restraint_line(restraint, window)
-                if string is not None:
-                    file.write(string)
+    analyze.restraint_list = guest_restraints + conformational_restraints
+    analyze.collect_data()
+    analyze.methods = ["ti-block", "mbar-block", "mbar-autoc"]
+    analyze.quicker_ti_matrix = True
+    analyze.bootcycles = 10000
+    analyze.compute_free_energy(phases=["attach"])
+    analyze.compute_ref_state_work(
+        [guest_restraints[0], guest_restraints[1], None, None, guest_restraints[2], None]
+    )
+    with open(f"{system}-results.json", "w") as f:
+        dumped = json.dumps(analyze.results, cls=NumpyEncoder)
+        f.write(dumped)
