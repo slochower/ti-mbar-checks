@@ -127,7 +127,7 @@ def setup_guest_restraints(
 
 
 def setup_conformation_restraints(
-    template, targets, windows, attach_fractions, structure, resname, fc=6.0
+    template, targets, attach_fractions, structure, resname, fc=6.0
 ):
 
     conformational_restraints = []
@@ -267,10 +267,8 @@ for system in systems:
     conformational_restraints = setup_conformation_restraints(
         host_conformational_template,
         host_conformational_targets,
-        windows,
         attach_fractions,
         structure,
-        windows=windows,
         resname="MGO",
         fc=6.0,
     )
